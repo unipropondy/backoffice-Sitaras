@@ -1476,7 +1476,7 @@ app.post("/dish", upload.single("image"), async (req, res) => {
 
       await pool.request()
         .input("ImageId", sql.UniqueIdentifier, imageId)
-        .input("ImageName", sql.VarChar(100), req.file.filename)
+        .input("ImageName", sql.VarChar(150), req.file.filename)
         .input("ImageData", sql.VarBinary(sql.MAX), imageBuffer)
         .query(`
           INSERT INTO ImageList (ImageId, ImageName, ImageData)
