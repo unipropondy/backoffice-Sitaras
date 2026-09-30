@@ -73,8 +73,9 @@ router.get("/:id", async (req, res) => {
 // ================= post  ====insert============= 
 const { v4: uuidv4 } = require("uuid");
 
-router.post("/", async (req, res) => {
+// ================= CREATE PROMO CODE =================
 
+router.post("/", async (req, res) => {
   try {
 
     const {
@@ -88,28 +89,55 @@ router.post("/", async (req, res) => {
       IsActive
     } = req.body;
 
-    const PromoId = uuidv4();
+    console.log("CREATE PROMO REQUEST:", {
+      PromoCode,
+      PromoName,
+      DiscountType,
+      DiscountValue,
+      MaxUsage,
+      UsedCount,
+      HasImage: !!PromoImage,
+      IsActive
+    });
+
+    // ================= VALIDATION =================
+
+    if (!PromoCode || !String(PromoCode).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Promo Code is required."
+      });
+    }
+
+    if (!PromoName || !String(PromoName).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Promo Name is required."
+      });
+    }
+
+    if (!DiscountType || !String(DiscountType).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Discount Type is required."
+      });
+    }
 
     const pool = await poolPromise;
 
-    let promoImageBuffer = null;
-
-    if (PromoImage) {
-      const base64Data = PromoImage.includes(",")
-        ? PromoImage.split(",")[1]
-        : PromoImage;
-
-      promoImageBuffer = Buffer.from(base64Data, "base64");
-    }
-
+    // ================= DUPLICATE CHECK =================
 
     const existingPromo = await pool.request()
-      .input("PromoCode", sql.NVarChar, PromoCode)
+      .input(
+        "PromoCode",
+        sql.NVarChar(100),
+        String(PromoCode).trim()
+      )
       .query(`
-    SELECT PromoId
-    FROM PromoCodeMaster
-    WHERE PromoCode = @PromoCode
-  `);
+        SELECT PromoId
+        FROM PromoCodeMaster
+        WHERE PromoCode = @PromoCode
+      `);
 
     if (existingPromo.recordset.length > 0) {
       return res.status(400).json({
@@ -118,59 +146,143 @@ router.post("/", async (req, res) => {
       });
     }
 
-    await pool.request()
-      .input("PromoId", sql.UniqueIdentifier, PromoId)
-      .input("PromoCode", sql.NVarChar, PromoCode)
-      .input("PromoName", sql.NVarChar, PromoName)
-      .input("DiscountType", sql.NVarChar, DiscountType)
-      .input("DiscountValue", sql.Decimal(18, 2), DiscountValue || 0)
-      .input("MaxUsage", sql.Int, MaxUsage || 0)
-      .input("UsedCount", sql.Int, UsedCount || 0)
-      .input("PromoImage", sql.VarBinary(sql.MAX), promoImageBuffer)
-      .input("IsActive", sql.Bit, IsActive ?? true)
+    // ================= IMAGE =================
 
+    let promoImageBuffer = null;
+
+    if (PromoImage && typeof PromoImage === "string") {
+
+      const base64Data = PromoImage.includes(",")
+        ? PromoImage.split(",")[1]
+        : PromoImage;
+
+      promoImageBuffer = Buffer.from(base64Data, "base64");
+    }
+
+    // ================= VALUES =================
+
+    const PromoId = uuidv4();
+
+    const discountValue =
+      DiscountValue === "" ||
+        DiscountValue === null ||
+        DiscountValue === undefined
+        ? 0
+        : Number(DiscountValue);
+
+    const maxUsage =
+      MaxUsage === "" ||
+        MaxUsage === null ||
+        MaxUsage === undefined
+        ? 0
+        : Number(MaxUsage);
+
+    const usedCount =
+      UsedCount === "" ||
+        UsedCount === null ||
+        UsedCount === undefined
+        ? 0
+        : Number(UsedCount);
+
+    const isActive =
+      IsActive === undefined ||
+        IsActive === null
+        ? true
+        : Boolean(IsActive);
+
+    // ================= INSERT =================
+
+    await pool.request()
+      .input(
+        "PromoId",
+        sql.UniqueIdentifier,
+        PromoId
+      )
+      .input(
+        "PromoCode",
+        sql.NVarChar(100),
+        String(PromoCode).trim()
+      )
+      .input(
+        "PromoName",
+        sql.NVarChar(150),
+        String(PromoName).trim()
+      )
+      .input(
+        "DiscountType",
+        sql.NVarChar(50),
+        String(DiscountType).trim()
+      )
+      .input(
+        "DiscountValue",
+        sql.Decimal(18, 2),
+        Number.isFinite(discountValue) ? discountValue : 0
+      )
+      .input(
+        "MaxUsage",
+        sql.Int,
+        Number.isFinite(maxUsage) ? maxUsage : 0
+      )
+      .input(
+        "UsedCount",
+        sql.Int,
+        Number.isFinite(usedCount) ? usedCount : 0
+      )
+      .input(
+        "PromoImage",
+        sql.VarBinary(sql.MAX),
+        promoImageBuffer
+      )
+      .input(
+        "IsActive",
+        sql.Bit,
+        isActive
+      )
       .query(`
-      INSERT INTO PromoCodeMaster
-      (
-        PromoId,
-        PromoCode,
-        PromoName,
-        DiscountType,
-        DiscountValue,
-        MaxUsage,
-        UsedCount,
-        PromoImage,
-        IsActive
-      )
-    VALUES
-      (
-        @PromoId,
-        @PromoCode,
-        @PromoName,
-        @DiscountType,
-        @DiscountValue,
-        @MaxUsage,
-        @UsedCount,
-        @PromoImage,
-        @IsActive
-      )
-      
+        INSERT INTO PromoCodeMaster
+        (
+          PromoId,
+          PromoCode,
+          PromoName,
+          DiscountType,
+          DiscountValue,
+          MaxUsage,
+          UsedCount,
+          PromoImage,
+          IsActive
+        )
+        VALUES
+        (
+          @PromoId,
+          @PromoCode,
+          @PromoName,
+          @DiscountType,
+          @DiscountValue,
+          @MaxUsage,
+          @UsedCount,
+          @PromoImage,
+          @IsActive
+        )
       `);
+
+    console.log("PROMO CREATED SUCCESSFULLY:", PromoId);
 
     res.json({
       success: true,
-      message: "Promo Code Created Successfully"
+      message: "Promo Code Created Successfully",
+      PromoId: PromoId
     });
 
   } catch (err) {
+
+    console.error("POST PROMO ERROR:", err);
+    console.error("POST PROMO ERROR MESSAGE:", err.message);
 
     res.status(500).json({
       success: false,
       message: err.message
     });
-
   }
-
 });
 
 // =================member put update BY ID ================= 
