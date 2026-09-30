@@ -192,6 +192,13 @@ router.put("/:id", async (req, res) => {
 
     const pool = await poolPromise;
 
+    console.log("PUT /api/promocode/:id", req.params.id, {
+      PromoCode: req.body.PromoCode,
+      DiscountValue: req.body.DiscountValue,
+      MaxUsage: req.body.MaxUsage,
+      HasImage: !!req.body.PromoImage
+    });
+
     let promoImageBuffer = null;
 
     if (PromoImage) {
@@ -260,6 +267,8 @@ router.put("/:id", async (req, res) => {
     });
 
   } catch (err) {
+
+    console.error("PUT PROMO ERROR:", err.message, err.stack);
 
     res.status(500).json({
       success: false,
