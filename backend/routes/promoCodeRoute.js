@@ -219,36 +219,40 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    await pool.request()
-
+    const request = pool.request()
       .input("PromoId", sql.UniqueIdentifier, req.params.id)
       .input("PromoCode", sql.NVarChar, PromoCode)
       .input("PromoName", sql.NVarChar, PromoName)
       .input("DiscountType", sql.NVarChar, DiscountType)
-      .input("DiscountValue", sql.Decimal(18, 2), DiscountValue)
-      .input("MaxUsage", sql.Int, MaxUsage)
-      .input("UsedCount", sql.Int, UsedCount || 0)
-      .input("PromoImage", sql.VarBinary(sql.MAX), promoImageBuffer)
-      .input("IsActive", sql.Bit, IsActive ?? true)
+      .input("DiscountValue", sql.Decimal(18, 2), parseFloat(DiscountValue) || 0)
+      .input("MaxUsage", sql.Int, parseInt(MaxUsage) || 0)
+      .input("UsedCount", sql.Int, parseInt(UsedCount) || 0)
+      .input("IsActive", sql.Bit, IsActive ?? true);
 
-      .query(`
+    let imageSetClause = "";
+    if (promoImageBuffer !== null) {
+      request.input("PromoImage", sql.VarBinary(sql.MAX), promoImageBuffer);
+      imageSetClause = "PromoImage=@PromoImage,";
+    } else if (PromoImage === "" || PromoImage === null) {
+      // Explicitly clearing the image
+      request.input("PromoImage", sql.VarBinary(sql.MAX), null);
+      imageSetClause = "PromoImage=@PromoImage,";
+    }
+    // If PromoImage was not sent at all, we don't update it (preserve existing)
 
+    await request.query(`
       UPDATE PromoCodeMaster
-
       SET
-
-      PromoCode=@PromoCode,
-      PromoName=@PromoName,
-      DiscountType=@DiscountType,
-      DiscountValue=@DiscountValue,
-      MaxUsage=@MaxUsage,
-      UsedCount=@UsedCount,
-      PromoImage=@PromoImage,
-      IsActive=@IsActive
-
+        PromoCode=@PromoCode,
+        PromoName=@PromoName,
+        DiscountType=@DiscountType,
+        DiscountValue=@DiscountValue,
+        MaxUsage=@MaxUsage,
+        UsedCount=@UsedCount,
+        ${imageSetClause}
+        IsActive=@IsActive
       WHERE PromoId=@PromoId
-
-      `);
+    `);
 
     res.json({
       success: true,
